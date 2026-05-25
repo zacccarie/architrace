@@ -137,6 +137,15 @@ def train_with_trigger(
                 if len(latents_buf) > latents_buf_size:
                     latents_buf[:] = latents_buf[-latents_buf_size:]
 
+            # Sprint 5B : visual triggers ont méthode .capture(model, step)
+            if hasattr(trigger, 'capture'):
+                trigger.capture(model, step)
+            # Composite : traverse weighted_triggers
+            if hasattr(trigger, 'weighted_triggers'):
+                for tw in trigger.weighted_triggers:
+                    if hasattr(tw.trigger, 'capture'):
+                        tw.trigger.capture(model, step)
+
             if step % log_every == 0:
                 v = eval_val(model, val_loader, task=task, max_batches=5)
                 val_loss_history.append(v['loss'])
@@ -181,6 +190,13 @@ def train_with_trigger(
                     model.widen_layer(target, grow_k, opt, use_gradmax=True)
                     # Reset latents_buf : dim activations a changé après widen
                     latents_buf.clear()
+                    # Sprint 5B : visual triggers ont buffer encoded → reset (image change post-widen)
+                    if hasattr(trigger, 'reset_buffer'):
+                        trigger.reset_buffer()
+                    if hasattr(trigger, 'weighted_triggers'):
+                        for tw in trigger.weighted_triggers:
+                            if hasattr(tw.trigger, 'reset_buffer'):
+                                tw.trigger.reset_buffer()
                     if use_distill and snap is not None:
                         teacher = snap.eval()
                         distill_remaining = distill_steps
