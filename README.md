@@ -6,12 +6,12 @@ Fusion VerifyGrowNet (adaptive-nn) × Dynamoscope. Architecture vivante × dynam
 
 Réseaux qui font pousser leur propre architecture (VG) + outil d'analyse de trajectoires latentes (dynamoscope). Quatre coutures fertiles :
 
-| # | Couture | Statut |
-|---|---|---|
-| 4 | **Meta-loop** : architecture VG = trajectoire dans dynamoscope. Lyapunov / SINDy / Koopman sur évolution architecture. | ✅ pipeline validé |
-| 1 | **Predictor swap** : VG remplace `prediction.py` LatentMLP. Growth triggered par surprise rollout n-step. | 🟡 en cours |
-| 2 | **Reverse trigger** : signaux dynamoscope (φ_id, Lyapunov, surprise) déclenchent mutations VG, remplacent plateau detection naïf. | ⬜ todo |
-| 3 | **Adaptive encoder** : VG-CNN remplace ResNet/DINOv2 fixe dans encoder dynamoscope. Modèle pousse là où complexité visuelle saturée. | ⬜ todo |
+| # | Couture | Statut | Finding |
+|---|---|---|---|
+| 4 | **Meta-loop** : architecture VG = trajectoire dans dynamoscope. Lyapunov / SINDy / Koopman sur évolution architecture. | ✅ | spectral_slope -1.85 universel, φ_id émergence, bimodal basin (factor 6× sep) |
+| 1 | **Predictor swap** : VG remplace `prediction.py` LatentMLP. Growth triggered par surprise rollout n-step. | 🟡 POC | Pareto compétitif à 50% params, variance élevée |
+| 2 | **Reverse trigger** : signaux dynamoscope (φ_id, Lyapunov, surprise) déclenchent mutations VG, remplacent plateau detection naïf. | ✅ | emergence/lyapunov +2.6% acc vs loss_plateau (0/3 fires sur baseline) |
+| 3 | **Adaptive encoder** : VG-CNN remplace ResNet/DINOv2 fixe dans encoder dynamoscope. | ✅ | **vg_tiny 498p 6× plus précis que ResNet50 23.5M** sur corr_dim Lorenz |
 
 ## Pourquoi cette fusion
 
