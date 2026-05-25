@@ -168,34 +168,34 @@ def train_strange_loop(
         for x, y in train_loader:
             x = x.to(device); y = y.to(device)
 
+            # Sprint 5C.1 : capture current_state AVANT forward (target pour state_predictor)
+            current_state = model.self_state()  # detached, snapshot pre-step weights
+
             opt.zero_grad()
-            task_logits, pred_next_state = model(x, prev_state)
+            task_logits, pred_state = model(x, prev_state)
             if task == 'classification':
                 task_loss = F.cross_entropy(task_logits, y)
             else:
                 task_loss = F.mse_loss(task_logits, y)
 
-            # Pred_next_state : forward pass produces this (B, state_dim)
-            # We compare to ACTUAL state AFTER this batch's update
-            # → done after opt.step() below
-            loss = task_loss  # surprise loss appliquée après step
+            # Self-surprise : prédiction de current_state depuis prev_state
+            # State predictor learn mapping prev_state → current_state
+            pred_mean = pred_state.mean(0)  # average over batch, dim (state_dim,)
+            if pred_mean.shape[0] != current_state.shape[0]:
+                min_d = min(pred_mean.shape[0], current_state.shape[0])
+                self_surprise = ((pred_mean[:min_d] - current_state[:min_d]) ** 2).mean()
+            else:
+                self_surprise = ((pred_mean - current_state) ** 2).mean()
+
+            # Total loss avec weight α
+            loss = task_loss + cfg.self_surprise_weight * self_surprise
             loss.backward()
             opt.step()
 
-            # Actual new state post-update
+            # Mesures (detached, après step)
             with torch.no_grad():
-                new_state = model.self_state()
-                # Compare pred (averaged over batch) vs actual
-                pred_mean = pred_next_state.mean(0).detach()
-                # Adapter state_dim si diff
-                if pred_mean.shape[0] != new_state.shape[0]:
-                    # Pad/crop pour matching
-                    min_d = min(pred_mean.shape[0], new_state.shape[0])
-                    self_surprise = ((pred_mean[:min_d] - new_state[:min_d]) ** 2).mean()
-                else:
-                    self_surprise = ((pred_mean - new_state) ** 2).mean()
-                drift = (new_state - prev_state).norm().item()
-                state_norm = new_state.norm().item()
+                drift = (current_state - prev_state).norm().item()
+                state_norm = current_state.norm().item()
 
             surprise_buf.append(self_surprise.item())
 
@@ -232,7 +232,7 @@ def train_strange_loop(
                           f'drift={drift:.3f} state_norm={state_norm:.3f} '
                           f'val_acc={val_acc:.3f}')
 
-            prev_state = new_state  # update for next batch (already detached)
+            prev_state = current_state  # update for next batch (déjà detached)
             step += 1
 
     # Final eval
