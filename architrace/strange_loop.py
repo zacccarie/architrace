@@ -118,6 +118,7 @@ class StrangeLoopConfig:
     surprise_spike_threshold: float = 0.3  # multiple of rolling baseline
     log_every: int = 30
     state_update_every: int = 1  # rafraîchit self_state tous les N batches
+    pred_horizon: int = 1  # Sprint 8B : prédit z[t+k] depuis z[t-1], k ∈ {1, 2, 3, 5, 10}
 
 
 def train_strange_loop(
@@ -151,6 +152,11 @@ def train_strange_loop(
 
     # State initial : 1 forward pour bootstrap
     prev_state = model.self_state()
+    # Sprint 8B : buffer de states passés pour multi-step prediction
+    # state_buffer[i] = state à step (current_step - i)
+    # On veut comparer pred_state (calculé depuis state[-horizon]) vs state[0] (now)
+    state_buffer: deque = deque(maxlen=cfg.pred_horizon + 1)
+    state_buffer.append(prev_state)
 
     history = {
         'step': [], 'task_loss': [], 'self_surprise': [],
@@ -171,8 +177,14 @@ def train_strange_loop(
             # Sprint 5C.1 : capture current_state AVANT forward (target pour state_predictor)
             current_state = model.self_state()  # detached, snapshot pre-step weights
 
+            # Sprint 8B : pour prediction horizon k, input = state buffer[-k]
+            if cfg.pred_horizon > 1 and len(state_buffer) >= cfg.pred_horizon:
+                input_state_for_pred = state_buffer[0]  # le plus ancien
+            else:
+                input_state_for_pred = prev_state
+
             opt.zero_grad()
-            task_logits, pred_state = model(x, prev_state)
+            task_logits, pred_state = model(x, input_state_for_pred)
             if task == 'classification':
                 task_loss = F.cross_entropy(task_logits, y)
             else:
@@ -233,6 +245,7 @@ def train_strange_loop(
                           f'val_acc={val_acc:.3f}')
 
             prev_state = current_state  # update for next batch (déjà detached)
+            state_buffer.append(current_state)  # Sprint 8B
             step += 1
 
     # Final eval
