@@ -1,0 +1,652 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>architrace — 9 architectures 3D</title>
+<style>
+:root {
+    --bg: #050505;
+    --fg: #f0f0e8;
+    --dim: #5a5a4a;
+    --cyan: #00ffff;
+    --magenta: #ff00aa;
+    --yellow: #ffe600;
+    --green: #00ff88;
+    --orange: #ff8800;
+    --purple: #aa66ff;
+    --red: #ff3344;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; font-family: 'PP Neue Bit', 'Chakra Petch', -apple-system, monospace; }
+html, body { width: 100%; height: 100%; background: var(--bg); color: var(--fg); overflow: hidden; }
+canvas { display: block; }
+
+#ui-top {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 10;
+    padding: 12px 18px; background: linear-gradient(180deg, rgba(0,0,0,0.92), rgba(0,0,0,0));
+    pointer-events: none;
+}
+#ui-top h1 {
+    font-size: 14px; font-weight: 400; letter-spacing: 0.18em; text-transform: uppercase;
+    color: var(--fg); margin-bottom: 6px;
+}
+#ui-top .subtitle {
+    font-size: 11px; color: var(--dim); letter-spacing: 0.05em;
+}
+
+#tabs {
+    position: fixed; bottom: 0; left: 0; right: 0; z-index: 10;
+    padding: 12px 18px 18px;
+    background: linear-gradient(0deg, rgba(0,0,0,0.92), rgba(0,0,0,0));
+    display: flex; flex-wrap: wrap; gap: 6px; justify-content: center;
+}
+.tab {
+    padding: 6px 12px; font-size: 10px; letter-spacing: 0.05em; text-transform: uppercase;
+    border: 1px solid var(--dim); color: var(--dim); background: transparent;
+    cursor: pointer; transition: all 0.18s ease;
+}
+.tab:hover { color: var(--fg); border-color: var(--fg); }
+.tab.active { color: var(--cyan); border-color: var(--cyan); background: rgba(0,255,255,0.06); }
+
+#arch-info {
+    position: fixed; top: 50px; left: 18px; z-index: 9;
+    max-width: 320px;
+    background: rgba(0,0,0,0.7); border: 1px solid var(--dim);
+    padding: 12px; backdrop-filter: blur(8px);
+    font-size: 11px; line-height: 1.6;
+}
+#arch-info .arch-name {
+    color: var(--cyan); font-size: 13px; letter-spacing: 0.1em;
+    text-transform: uppercase; margin-bottom: 4px;
+}
+#arch-info .arch-sprint {
+    color: var(--yellow); font-size: 10px; margin-bottom: 8px;
+}
+#arch-info .arch-desc {
+    color: var(--fg); margin-bottom: 8px;
+}
+#arch-info .arch-meta {
+    color: var(--dim); font-size: 10px;
+}
+
+#tooltip {
+    position: fixed; pointer-events: none; z-index: 100;
+    background: rgba(10,10,10,0.95); border: 1px solid var(--cyan);
+    padding: 10px 12px; max-width: 280px;
+    font-size: 11px; line-height: 1.5;
+    box-shadow: 0 0 24px rgba(0,255,255,0.2);
+    display: none;
+    backdrop-filter: blur(8px);
+}
+#tooltip .tt-name {
+    color: var(--cyan); font-size: 12px; letter-spacing: 0.08em;
+    text-transform: uppercase; margin-bottom: 4px;
+}
+#tooltip .tt-role {
+    color: var(--fg); margin-bottom: 6px;
+}
+#tooltip .tt-dim {
+    color: var(--magenta); font-size: 10px; font-family: 'PP Neue Bit', monospace;
+    margin-bottom: 4px;
+}
+#tooltip .tt-train {
+    color: var(--green); font-size: 10px;
+}
+#tooltip .tt-train.frozen { color: var(--orange); }
+#tooltip .tt-sprint {
+    color: var(--yellow); font-size: 9px; margin-top: 6px; opacity: 0.7;
+}
+
+#legend {
+    position: fixed; top: 50px; right: 18px; z-index: 9;
+    background: rgba(0,0,0,0.7); border: 1px solid var(--dim);
+    padding: 10px 12px; font-size: 10px; line-height: 1.8;
+    backdrop-filter: blur(8px);
+}
+#legend .legend-title { color: var(--dim); margin-bottom: 4px; letter-spacing: 0.1em; }
+.legend-item { display: flex; align-items: center; gap: 8px; }
+.legend-dot { width: 10px; height: 10px; border-radius: 1px; }
+
+#instructions {
+    position: fixed; bottom: 80px; left: 18px; z-index: 9;
+    font-size: 10px; color: var(--dim); letter-spacing: 0.05em;
+}
+</style>
+</head>
+<body>
+
+<div id="ui-top">
+    <h1>architrace — 9 architectures self-référentielles</h1>
+    <div class="subtitle">click hover sur les modules · drag pour rotation · scroll pour zoom</div>
+</div>
+
+<div id="arch-info">
+    <div class="arch-name" id="arch-name">—</div>
+    <div class="arch-sprint" id="arch-sprint">—</div>
+    <div class="arch-desc" id="arch-desc">—</div>
+    <div class="arch-meta" id="arch-meta">—</div>
+</div>
+
+<div id="legend">
+    <div class="legend-title">MODULE TYPES</div>
+    <div class="legend-item"><span class="legend-dot" style="background:#00ffff"></span> Input/Output</div>
+    <div class="legend-item"><span class="legend-dot" style="background:#ff00aa"></span> Body/Transformer</div>
+    <div class="legend-item"><span class="legend-dot" style="background:#ffe600"></span> Fusion</div>
+    <div class="legend-item"><span class="legend-dot" style="background:#00ff88"></span> Predictor/State</div>
+    <div class="legend-item"><span class="legend-dot" style="background:#aa66ff"></span> Observer</div>
+    <div class="legend-item"><span class="legend-dot" style="background:#ff3344"></span> Loss/Aux</div>
+    <div class="legend-item"><span class="legend-dot" style="background:#ff8800"></span> LoRA/Adapter</div>
+</div>
+
+<div id="instructions">
+    [mouse] orbit · [wheel] zoom · [hover module] details
+</div>
+
+<div id="tabs"></div>
+
+<div id="tooltip">
+    <div class="tt-name"></div>
+    <div class="tt-role"></div>
+    <div class="tt-dim"></div>
+    <div class="tt-train"></div>
+    <div class="tt-sprint"></div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+// =====================================================================
+// COULEURS module types
+// =====================================================================
+const COLOR = {
+    INPUT: 0x00ffff,
+    BODY: 0xff00aa,
+    FUSION: 0xffe600,
+    PREDICTOR: 0x00ff88,
+    OBSERVER: 0xaa66ff,
+    LOSS: 0xff3344,
+    LORA: 0xff8800,
+    STATE: 0x00ff88,
+    EMBED: 0x00ffff,
+    HEAD: 0xff00aa,
+};
+
+// =====================================================================
+// ARCHITECTURES (data-driven)
+// =====================================================================
+const ARCHS = {
+
+selfReferentialVG: {
+    name: 'SelfReferentialVG',
+    sprint: 'S5C, S11.x, S15C',
+    description: 'MLP self-référentiel — exaptation 103× MNIST (vindiqué S15C 74× drift-norm)',
+    meta: '~10k params · MLP body · MNIST · cible vision baseline',
+    modules: [
+        {id:'input', label:'Input x', role:'Image flatten MNIST', dim:'(B, 784)', type:'INPUT', train:'static', pos:[-3,4,0], size:[1.2,0.6,0.6]},
+        {id:'prev_state', label:'prev_state z[t-1]', role:'Self-state au step précédent (observer encoded)', dim:'(B, 16)', type:'STATE', train:'cached', pos:[3,4,0], size:[1,0.6,0.6]},
+        {id:'body', label:'MLP Body', role:'Hidden representation (3 couches dense)', dim:'(B, 64)', type:'BODY', train:'trainable', pos:[-3,2,0], size:[1.4,0.8,0.8]},
+        {id:'fusion', label:'Fusion', role:'Concat feat + prev_state → projection', dim:'(B, 80) → (B, 64)', type:'FUSION', train:'trainable', pos:[0,1,0], size:[1.5,0.7,0.7]},
+        {id:'task_head', label:'Task Head', role:'Classification 10 classes MNIST', dim:'(B, 10)', type:'HEAD', train:'trainable', pos:[-2.5,-0.5,0], size:[1,0.6,0.6]},
+        {id:'state_predictor', label:'State Predictor', role:'Prédit prochain self-state z[t]', dim:'(B, 16)', type:'PREDICTOR', train:'trainable', pos:[2.5,-0.5,0], size:[1.2,0.6,0.6]},
+        {id:'observer', label:'Observer VGCNN', role:'render_arch_state → encode self à 16D', dim:'64×64×3 → 16', type:'OBSERVER', train:'frozen', pos:[5,1,0], size:[1.4,0.8,0.8]},
+        {id:'aux_loss', label:'Aux Loss MSE', role:'MSE(predicted, actual) = self-coherence', dim:'scalar', type:'LOSS', train:'compute', pos:[3.5,-2,0], size:[1.2,0.6,0.6]},
+        {id:'task_loss', label:'Task Loss CE', role:'Cross-entropy classification', dim:'scalar', type:'LOSS', train:'compute', pos:[-2.5,-2,0], size:[1.2,0.6,0.6]},
+    ],
+    edges: [
+        ['input','body'], ['body','fusion'], ['prev_state','fusion'],
+        ['fusion','task_head'], ['fusion','state_predictor'],
+        ['task_head','task_loss'], ['state_predictor','aux_loss'],
+        ['observer','prev_state'],
+    ],
+},
+
+selfReferentialCNN: {
+    name: 'SelfReferentialCNN',
+    sprint: 'S16B',
+    description: 'CNN self-référentiel — CIFAR-100 scale validation S16B',
+    meta: '~150k params · 3 blocs conv · cible vision scaled',
+    modules: [
+        {id:'input', label:'Input image', role:'RGB image CIFAR-100', dim:'(B, 3, 32, 32)', type:'INPUT', train:'static', pos:[-3,4,0], size:[1.4,0.7,0.7]},
+        {id:'prev_state', label:'prev_state z[t-1]', role:'Self-state au step précédent', dim:'(B, 16)', type:'STATE', train:'cached', pos:[3,4,0], size:[1,0.6,0.6]},
+        {id:'stem', label:'Conv stem', role:'Conv 3→32 + BN + ReLU', dim:'(B, 32, 32, 32)', type:'BODY', train:'trainable', pos:[-3,2.5,0], size:[1.4,0.7,0.7]},
+        {id:'block1', label:'ConvBlock 1', role:'32→64 + downsample s=2', dim:'(B, 64, 16, 16)', type:'BODY', train:'trainable', pos:[-3,1.2,0], size:[1.3,0.7,0.7]},
+        {id:'block2', label:'ConvBlock 2', role:'64→128 + downsample s=2', dim:'(B, 128, 8, 8)', type:'BODY', train:'trainable', pos:[-3,-0.1,0], size:[1.3,0.7,0.7]},
+        {id:'gap', label:'GAP', role:'Global Average Pool spatial', dim:'(B, 128)', type:'BODY', train:'compute', pos:[-1.5,-1.3,0], size:[0.8,0.6,0.6]},
+        {id:'fusion', label:'Fusion', role:'Concat feat + prev_state', dim:'(B, 144) → (B, 64)', type:'FUSION', train:'trainable', pos:[0.5,-1.3,0], size:[1.5,0.7,0.7]},
+        {id:'task_head', label:'Task Head', role:'Classification 100 classes CIFAR-100', dim:'(B, 100)', type:'HEAD', train:'trainable', pos:[-1.5,-2.8,0], size:[1.2,0.6,0.6]},
+        {id:'state_predictor', label:'State Predictor', role:'Prédit z[t]', dim:'(B, 16)', type:'PREDICTOR', train:'trainable', pos:[2.5,-2.8,0], size:[1.2,0.6,0.6]},
+        {id:'observer', label:'Observer VGCNN', role:'Encode arch image', dim:'64×64×3 → 16', type:'OBSERVER', train:'frozen', pos:[4.5,1,0], size:[1.4,0.8,0.8]},
+    ],
+    edges: [['input','stem'],['stem','block1'],['block1','block2'],['block2','gap'],['gap','fusion'],['prev_state','fusion'],['fusion','task_head'],['fusion','state_predictor'],['observer','prev_state']],
+},
+
+resnetSelfAgent: {
+    name: 'ResNetSelfAgent',
+    sprint: 'S18C',
+    description: 'ResNet body — exaptation 8-12× cross-arch CIFAR-10',
+    meta: '~200k params · 3 BasicBlocks · skip connections · vision OK',
+    modules: [
+        {id:'input', label:'Input', role:'RGB CIFAR-10', dim:'(B, 3, 32, 32)', type:'INPUT', train:'static', pos:[-4,4,0], size:[1.4,0.7,0.7]},
+        {id:'prev_state', label:'prev_state', role:'z[t-1]', dim:'(B, 16)', type:'STATE', train:'cached', pos:[3,4,0], size:[1,0.6,0.6]},
+        {id:'stem', label:'Conv stem', role:'3→32 + BN + ReLU', dim:'(B, 32, 32, 32)', type:'BODY', train:'trainable', pos:[-4,2.5,0], size:[1.3,0.7,0.7]},
+        {id:'block1', label:'BasicBlock 1', role:'32→32 + residual skip', dim:'(B, 32, 32, 32)', type:'BODY', train:'trainable', pos:[-4,1.2,0], size:[1.3,0.7,0.7]},
+        {id:'block2', label:'BasicBlock 2', role:'32→64 s=2 + skip', dim:'(B, 64, 16, 16)', type:'BODY', train:'trainable', pos:[-4,-0.1,0], size:[1.3,0.7,0.7]},
+        {id:'block3', label:'BasicBlock 3', role:'64→128 s=2 + skip', dim:'(B, 128, 8, 8)', type:'BODY', train:'trainable', pos:[-4,-1.4,0], size:[1.3,0.7,0.7]},
+        {id:'gap', label:'GAP', role:'avg pool spatial', dim:'(B, 128)', type:'BODY', train:'compute', pos:[-2,-2.7,0], size:[0.9,0.6,0.6]},
+        {id:'fusion', label:'Fusion', role:'feat + prev_state', dim:'(B, 144)→64', type:'FUSION', train:'trainable', pos:[0,-2.7,0], size:[1.5,0.7,0.7]},
+        {id:'task_head', label:'Task Head', role:'10 classes', dim:'(B, 10)', type:'HEAD', train:'trainable', pos:[-1.5,-4,0], size:[1.2,0.6,0.6]},
+        {id:'state_pred', label:'State Predictor', role:'predict z[t]', dim:'(B, 16)', type:'PREDICTOR', train:'trainable', pos:[2.5,-4,0], size:[1.2,0.6,0.6]},
+        {id:'observer', label:'Observer VGCNN', role:'encode arch', dim:'64×64×3→16', type:'OBSERVER', train:'frozen', pos:[5,1,0], size:[1.4,0.8,0.8]},
+    ],
+    edges: [['input','stem'],['stem','block1'],['block1','block2'],['block2','block3'],['block3','gap'],['gap','fusion'],['prev_state','fusion'],['fusion','task_head'],['fusion','state_pred'],['observer','prev_state']],
+},
+
+vitSelfAgent: {
+    name: 'ViTSelfAgent',
+    sprint: 'S18C (INVERSE 0.7×)',
+    description: 'Vision Transformer — exaptation INVERSE (réfute universalité)',
+    meta: '~120k params · attention 4 heads × 3 layers · INCOMPATIBLE observer',
+    modules: [
+        {id:'input', label:'Input', role:'RGB image 32×32', dim:'(B, 3, 32, 32)', type:'INPUT', train:'static', pos:[-4,4,0], size:[1.4,0.7,0.7]},
+        {id:'prev_state', label:'prev_state', role:'z[t-1]', dim:'(B, 16)', type:'STATE', train:'cached', pos:[3,4,0], size:[1,0.6,0.6]},
+        {id:'patch_embed', label:'Patch Embed', role:'Conv 4×4 stride=4 → patches', dim:'(B, 64, 64)', type:'EMBED', train:'trainable', pos:[-4,2.5,0], size:[1.3,0.7,0.7]},
+        {id:'cls_pos', label:'[CLS] + Pos', role:'CLS token + positional embed', dim:'(B, 65, 64)', type:'EMBED', train:'trainable', pos:[-4,1.2,0], size:[1.3,0.7,0.7]},
+        {id:'attn1', label:'Attention 1', role:'4 heads × d=64', dim:'(B, 65, 64)', type:'BODY', train:'trainable', pos:[-4,-0.1,0], size:[1.3,0.7,0.7]},
+        {id:'attn2', label:'Attention 2', role:'4 heads × d=64', dim:'(B, 65, 64)', type:'BODY', train:'trainable', pos:[-4,-1.4,0], size:[1.3,0.7,0.7]},
+        {id:'attn3', label:'Attention 3', role:'4 heads × d=64', dim:'(B, 65, 64)', type:'BODY', train:'trainable', pos:[-4,-2.7,0], size:[1.3,0.7,0.7]},
+        {id:'cls_extract', label:'CLS extract', role:'Take z[:, 0] = CLS token', dim:'(B, 64)', type:'BODY', train:'compute', pos:[-2,-4,0], size:[1,0.6,0.6]},
+        {id:'fusion', label:'Fusion', role:'CLS + prev_state', dim:'(B, 80)→64', type:'FUSION', train:'trainable', pos:[0,-4,0], size:[1.5,0.7,0.7]},
+        {id:'task_head', label:'Task Head', role:'10 classes', dim:'(B, 10)', type:'HEAD', train:'trainable', pos:[-1.5,-5.3,0], size:[1.2,0.6,0.6]},
+        {id:'state_pred', label:'State Predictor', role:'predict z[t] — geometry mismatch!', dim:'(B, 16)', type:'PREDICTOR', train:'trainable', pos:[2.5,-5.3,0], size:[1.2,0.6,0.6]},
+        {id:'observer', label:'Observer VGCNN', role:'Compat issue — hidden ≠ pixel manifold', dim:'64×64×3→16', type:'OBSERVER', train:'frozen', pos:[5,1,0], size:[1.4,0.8,0.8]},
+    ],
+    edges: [['input','patch_embed'],['patch_embed','cls_pos'],['cls_pos','attn1'],['attn1','attn2'],['attn2','attn3'],['attn3','cls_extract'],['cls_extract','fusion'],['prev_state','fusion'],['fusion','task_head'],['fusion','state_pred'],['observer','prev_state']],
+},
+
+mixerSelfAgent: {
+    name: 'MixerSelfAgent',
+    sprint: 'S18C',
+    description: 'MLP-Mixer body — exaptation 8-12× (cohérent CNN/ResNet)',
+    meta: '~140k params · token mix + channel mix · 3 blocks',
+    modules: [
+        {id:'input', label:'Input', role:'RGB CIFAR-10', dim:'(B, 3, 32, 32)', type:'INPUT', train:'static', pos:[-4,4,0], size:[1.4,0.7,0.7]},
+        {id:'prev_state', label:'prev_state', role:'z[t-1]', dim:'(B, 16)', type:'STATE', train:'cached', pos:[3,4,0], size:[1,0.6,0.6]},
+        {id:'patch_embed', label:'Patch Embed', role:'Conv 4×4 stride=4', dim:'(B, 64, 64)', type:'EMBED', train:'trainable', pos:[-4,2.5,0], size:[1.3,0.7,0.7]},
+        {id:'mixer1', label:'MixerBlock 1', role:'token-mix MLP + channel-mix MLP', dim:'(B, 64, 64)', type:'BODY', train:'trainable', pos:[-4,1.2,0], size:[1.4,0.7,0.7]},
+        {id:'mixer2', label:'MixerBlock 2', role:'token-mix + channel-mix', dim:'(B, 64, 64)', type:'BODY', train:'trainable', pos:[-4,-0.1,0], size:[1.4,0.7,0.7]},
+        {id:'mixer3', label:'MixerBlock 3', role:'token-mix + channel-mix', dim:'(B, 64, 64)', type:'BODY', train:'trainable', pos:[-4,-1.4,0], size:[1.4,0.7,0.7]},
+        {id:'pool', label:'LN + mean', role:'LayerNorm + mean over tokens', dim:'(B, 64)', type:'BODY', train:'compute', pos:[-2,-2.7,0], size:[1,0.6,0.6]},
+        {id:'fusion', label:'Fusion', role:'mean + prev_state', dim:'(B, 80)→64', type:'FUSION', train:'trainable', pos:[0,-2.7,0], size:[1.5,0.7,0.7]},
+        {id:'task_head', label:'Task Head', role:'10 classes', dim:'(B, 10)', type:'HEAD', train:'trainable', pos:[-1.5,-4,0], size:[1.2,0.6,0.6]},
+        {id:'state_pred', label:'State Predictor', role:'predict z[t]', dim:'(B, 16)', type:'PREDICTOR', train:'trainable', pos:[2.5,-4,0], size:[1.2,0.6,0.6]},
+        {id:'observer', label:'Observer VGCNN', role:'encode arch', dim:'64×64×3→16', type:'OBSERVER', train:'frozen', pos:[5,1,0], size:[1.4,0.8,0.8]},
+    ],
+    edges: [['input','patch_embed'],['patch_embed','mixer1'],['mixer1','mixer2'],['mixer2','mixer3'],['mixer3','pool'],['pool','fusion'],['prev_state','fusion'],['fusion','task_head'],['fusion','state_pred'],['observer','prev_state']],
+},
+
+dyadicAgent: {
+    name: 'DyadicAgent',
+    sprint: 'S11.2 (symétrie self/other)',
+    description: 'Deux agents s\'observant mutuellement — symétrie self/other',
+    meta: '2× SelfReferentialVG · cross-prediction · pas de hiérarchie',
+    modules: [
+        {id:'inputA', label:'Input A', role:'Image agent A', dim:'(B, 784)', type:'INPUT', train:'static', pos:[-4,3.5,0], size:[1.2,0.6,0.6]},
+        {id:'inputB', label:'Input B', role:'Image agent B', dim:'(B, 784)', type:'INPUT', train:'static', pos:[4,3.5,0], size:[1.2,0.6,0.6]},
+        {id:'bodyA', label:'Body A', role:'MLP agent A', dim:'(B, 64)', type:'BODY', train:'trainable', pos:[-4,2,0], size:[1.3,0.7,0.7]},
+        {id:'bodyB', label:'Body B', role:'MLP agent B', dim:'(B, 64)', type:'BODY', train:'trainable', pos:[4,2,0], size:[1.3,0.7,0.7]},
+        {id:'stateA', label:'State A', role:'z_A self-state', dim:'(B, 16)', type:'STATE', train:'extract', pos:[-4,0.5,0], size:[1,0.6,0.6]},
+        {id:'stateB', label:'State B', role:'z_B self-state', dim:'(B, 16)', type:'STATE', train:'extract', pos:[4,0.5,0], size:[1,0.6,0.6]},
+        {id:'predA_of_B', label:'A predicts B', role:'Agent A prédit state de B (other-model)', dim:'(B, 16)', type:'PREDICTOR', train:'trainable', pos:[-1.5,-1,0], size:[1.4,0.7,0.7]},
+        {id:'predB_of_A', label:'B predicts A', role:'Agent B prédit state de A (other-model)', dim:'(B, 16)', type:'PREDICTOR', train:'trainable', pos:[1.5,-1,0], size:[1.4,0.7,0.7]},
+        {id:'loss_A', label:'Cross-loss A→B', role:'MSE(predA_of_B, stateB)', dim:'scalar', type:'LOSS', train:'compute', pos:[-2,-2.5,0], size:[1.2,0.6,0.6]},
+        {id:'loss_B', label:'Cross-loss B→A', role:'MSE(predB_of_A, stateA) — symétrie', dim:'scalar', type:'LOSS', train:'compute', pos:[2,-2.5,0], size:[1.2,0.6,0.6]},
+    ],
+    edges: [['inputA','bodyA'],['inputB','bodyB'],['bodyA','stateA'],['bodyB','stateB'],['stateA','predA_of_B'],['stateB','predB_of_A'],['predA_of_B','loss_A'],['stateB','loss_A'],['predB_of_A','loss_B'],['stateA','loss_B']],
+},
+
+perTokenGPT: {
+    name: 'PerTokenGPT',
+    sprint: 'S18B (échec)',
+    description: 'GPT from scratch per-token self-coherence — échec sur 20news',
+    meta: '~0.7M params · 4 layers × 4 heads · d_model=128 · char-level',
+    modules: [
+        {id:'tokens', label:'Token IDs', role:'Sequence tokens (B, T)', dim:'(B, T=128)', type:'INPUT', train:'static', pos:[-4,4,0], size:[1.2,0.6,0.6]},
+        {id:'token_embed', label:'Token Embed', role:'Embedding lookup', dim:'(B, T, 128)', type:'EMBED', train:'trainable', pos:[-4,2.5,0], size:[1.3,0.7,0.7]},
+        {id:'pos_embed', label:'Pos Embed', role:'Learned positional embedding', dim:'(B, T, 128)', type:'EMBED', train:'trainable', pos:[-2,2.5,0], size:[1.2,0.6,0.6]},
+        {id:'tx1', label:'Transformer 1', role:'4 heads + FFN 4× expansion', dim:'(B, T, 128)', type:'BODY', train:'trainable', pos:[-4,1,0], size:[1.4,0.7,0.7]},
+        {id:'tx2', label:'Transformer 2', role:'4 heads + FFN', dim:'(B, T, 128)', type:'BODY', train:'trainable', pos:[-4,-0.3,0], size:[1.4,0.7,0.7]},
+        {id:'tx3', label:'Transformer 3', role:'4 heads + FFN', dim:'(B, T, 128)', type:'BODY', train:'trainable', pos:[-4,-1.6,0], size:[1.4,0.7,0.7]},
+        {id:'tx4', label:'Transformer 4', role:'4 heads + FFN', dim:'(B, T, 128)', type:'BODY', train:'trainable', pos:[-4,-2.9,0], size:[1.4,0.7,0.7]},
+        {id:'ln_f', label:'LayerNorm', role:'Final layer norm', dim:'(B, T, 128)', type:'BODY', train:'trainable', pos:[-2,-2.9,0], size:[1,0.6,0.6]},
+        {id:'lm_head', label:'LM Head', role:'Project to vocab logits', dim:'(B, T, V=80)', type:'HEAD', train:'trainable', pos:[-2,-4.2,0], size:[1.2,0.6,0.6]},
+        {id:'state_proj', label:'State Proj', role:'Per-token projection h→state', dim:'(B, T, 32)', type:'PREDICTOR', train:'trainable', pos:[2,-1.6,0], size:[1.2,0.6,0.6]},
+        {id:'predictor', label:'Predictor', role:'MLP state→state (predict next)', dim:'(B, T, 32)', type:'PREDICTOR', train:'trainable', pos:[2,-2.9,0], size:[1.2,0.6,0.6]},
+        {id:'lm_loss', label:'LM Loss CE', role:'Cross-entropy next-token', dim:'scalar', type:'LOSS', train:'compute', pos:[0,-5.5,0], size:[1.2,0.6,0.6]},
+        {id:'aux_loss', label:'Aux Loss MSE', role:'MSE(predictor, state_next.detach())', dim:'scalar', type:'LOSS', train:'compute', pos:[3,-4.2,0], size:[1.2,0.6,0.6]},
+    ],
+    edges: [['tokens','token_embed'],['token_embed','tx1'],['pos_embed','tx1'],['tx1','tx2'],['tx2','tx3'],['tx3','tx4'],['tx4','ln_f'],['ln_f','lm_head'],['ln_f','state_proj'],['state_proj','predictor'],['lm_head','lm_loss'],['predictor','aux_loss']],
+},
+
+scaleLoRA: {
+    name: 'scale_1b LoRA + InfoNCE',
+    sprint: 'S19, S20C (recipe révisé)',
+    description: 'pythia 410M-6.9B + LoRA r=16 + InfoNCE per-token α=0.1',
+    meta: '405M-6.9B params · LoRA adapt seulement attention · InfoNCE sweet spot α=0.1',
+    modules: [
+        {id:'tokens', label:'Token IDs', role:'Sequence tokens 20news', dim:'(B=4, T=127)', type:'INPUT', train:'static', pos:[-4,4,0], size:[1.2,0.6,0.6]},
+        {id:'token_embed', label:'Token Embed', role:'pythia vocab embedding (frozen)', dim:'(B, T, d=1024-4096)', type:'EMBED', train:'frozen', pos:[-4,2.7,0], size:[1.3,0.7,0.7]},
+        {id:'pythia_body', label:'Pythia Body', role:'24-32 transformer layers (FROZEN base)', dim:'(B, T, d)', type:'BODY', train:'frozen', pos:[-4,1.2,0], size:[1.6,1.0,1.0]},
+        {id:'lora_qkv', label:'LoRA query_key_value', role:'r=16 adapter sur attention QKV (TRAINABLE)', dim:'+~6M params', type:'LORA', train:'trainable', pos:[-1.5,1.5,0], size:[1.5,0.6,0.6]},
+        {id:'lora_dense', label:'LoRA dense', role:'r=16 adapter sur dense MLP (TRAINABLE)', dim:'+~6M params', type:'LORA', train:'trainable', pos:[-1.5,0.5,0], size:[1.5,0.6,0.6]},
+        {id:'hidden', label:'Hidden states', role:'Output dernière couche', dim:'(B, T, d)', type:'BODY', train:'compute', pos:[-4,-0.3,0], size:[1.4,0.7,0.7]},
+        {id:'lm_head', label:'LM Head', role:'Project vocab (frozen)', dim:'(B, T, V)', type:'HEAD', train:'frozen', pos:[-2,-2,0], size:[1.2,0.6,0.6]},
+        {id:'state_proj', label:'state_proj (fp32)', role:'d_model → state_dim=64 (per-token)', dim:'(B, T, 64)', type:'PREDICTOR', train:'trainable', pos:[2,-0.3,0], size:[1.3,0.6,0.6]},
+        {id:'predictor', label:'Predictor (fp32)', role:'MLP 64→128→64 next-state', dim:'(B, T, 64)', type:'PREDICTOR', train:'trainable', pos:[2,-1.6,0], size:[1.3,0.6,0.6]},
+        {id:'lm_loss', label:'lm_loss', role:'Cross-entropy next-token', dim:'scalar', type:'LOSS', train:'compute', pos:[-1,-3.3,0], size:[1.2,0.6,0.6]},
+        {id:'infonce', label:'InfoNCE α=0.1', role:'Contrastive per-token sweet spot Sprint 20C', dim:'scalar', type:'LOSS', train:'compute', pos:[3,-3.3,0], size:[1.4,0.6,0.6]},
+    ],
+    edges: [['tokens','token_embed'],['token_embed','pythia_body'],['lora_qkv','pythia_body'],['lora_dense','pythia_body'],['pythia_body','hidden'],['hidden','lm_head'],['hidden','state_proj'],['state_proj','predictor'],['lm_head','lm_loss'],['predictor','infonce']],
+},
+
+vgcnnEncoder: {
+    name: 'VGCNNEncoder',
+    sprint: 'S3 (encoder baseline)',
+    description: 'Tiny CNN ~498 params — analyse trajectoires visuelles',
+    meta: 'vg_tiny=498p · vg_small=6.4k · vg_medium=24k · usé partout comme observer',
+    modules: [
+        {id:'input', label:'Input frame', role:'Image 64×64×3 (Lorenz trajectory rendered)', dim:'(N, 64, 64, 3)', type:'INPUT', train:'static', pos:[0,4,0], size:[1.5,0.8,0.8]},
+        {id:'conv1', label:'Conv 1', role:'Conv 3→4 channels, k=3, ReLU', dim:'(N, 4, 32, 32)', type:'BODY', train:'random-init', pos:[0,2.5,0], size:[1.2,0.7,0.7]},
+        {id:'conv2', label:'Conv 2', role:'Conv 4→8 channels, k=3, ReLU', dim:'(N, 8, 16, 16)', type:'BODY', train:'random-init', pos:[0,1,0], size:[1.2,0.7,0.7]},
+        {id:'gap', label:'AdaptiveAvgPool', role:'pool to 1×1', dim:'(N, 8)', type:'BODY', train:'compute', pos:[0,-0.5,0], size:[1.1,0.6,0.6]},
+        {id:'latent', label:'Latent 8D', role:'Output embedding for downstream', dim:'(N, 8)', type:'PREDICTOR', train:'output', pos:[0,-2,0], size:[1.3,0.7,0.7]},
+        {id:'usage1', label:'→ Dynamoscope', role:'Inject latent → trajectory analyses (Lyap, corr_dim, spectral)', dim:'analyses dict', type:'OBSERVER', train:'downstream', pos:[-2.5,-3.5,0], size:[1.5,0.6,0.6]},
+        {id:'usage2', label:'→ Self-Agent observer', role:'self-state extraction for SelfReferentialVG', dim:'state_dim=16', type:'OBSERVER', train:'downstream', pos:[2.5,-3.5,0], size:[1.5,0.6,0.6]},
+    ],
+    edges: [['input','conv1'],['conv1','conv2'],['conv2','gap'],['gap','latent'],['latent','usage1'],['latent','usage2']],
+},
+
+worldExaptationFlow: {
+    name: 'World→Self Exaptation Flow (S20D/F)',
+    sprint: 'S20D (predictor-only ✓) / S20F (whole-model ✗)',
+    description: 'Phase 1 World pre-train + Phase 2 Self switch — universalité conditionnelle',
+    meta: '2 régimes : S20D predictor-only OK / S20F whole-model dégrade',
+    modules: [
+        {id:'lorenz', label:'Lorenz coords', role:'Système chaotique 3D ground truth (n=2000, dt=0.01)', dim:'(N, 3)', type:'INPUT', train:'static', pos:[-4,4,0], size:[1.3,0.7,0.7]},
+        {id:'phase1_pred', label:'Phase 1 (S20D): Predictor only', role:'Pre-train predictor MLP sur Lorenz next-step. LLM FROZEN. Speedup 1.02× (pas exaptation vraie) mais smooth-prior generic.', dim:'200 steps MSE', type:'PREDICTOR', train:'trainable', pos:[-4,2.5,0], size:[2,0.9,0.9]},
+        {id:'phase1_full', label:'Phase 1 (S20F): LLM whole + LoRA', role:'LoRA fine-tune entire model on Lorenz. Catastrophic forgetting partial → Δpp +0.53 in phase 2.', dim:'200 steps inputs_embeds bypass', type:'LORA', train:'trainable', pos:[-4,1,0], size:[2.2,0.9,0.9]},
+        {id:'phase2', label:'Phase 2: Switch to text + InfoNCE α=0.1', role:'Fine-tune sur 20newsgroups + per-token InfoNCE', dim:'80 steps LoRA + state', type:'BODY', train:'trainable', pos:[0,-0.5,0], size:[2.5,1.0,1.0]},
+        {id:'result_d', label:'S20D result Δpp=-0.61', role:'Smooth-prior generic (Lorenz≈Gaussian S20E). Vanishes 1.4B+', dim:'val perplexity', type:'PREDICTOR', train:'metric', pos:[-2,-2.5,0], size:[1.6,0.7,0.7]},
+        {id:'result_f', label:'S20F result Δpp=+0.53', role:'Whole-model warmup = forgetting → DÉGRADE', dim:'val perplexity', type:'LOSS', train:'metric', pos:[2,-2.5,0], size:[1.6,0.7,0.7]},
+        {id:'verdict', label:'Verdict : universalité réfutée', role:'Exaptation vraie pas universelle. Smooth-prior générique seul survit petit scale.', dim:'paper §4.10 révisé', type:'OBSERVER', train:'conclusion', pos:[0,-4,0], size:[2.5,0.8,0.8]},
+    ],
+    edges: [['lorenz','phase1_pred'],['lorenz','phase1_full'],['phase1_pred','phase2'],['phase1_full','phase2'],['phase2','result_d'],['phase2','result_f'],['result_d','verdict'],['result_f','verdict']],
+},
+
+};
+
+// =====================================================================
+// THREE.JS SETUP
+// =====================================================================
+let scene, camera, renderer, raycaster, mouse;
+let currentArch = 'selfReferentialVG';
+let archMeshes = [];
+let edgeLines = [];
+let hoveredMesh = null;
+let rotateGroup;
+
+function init() {
+    scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x050505);
+    scene.fog = new THREE.Fog(0x050505, 12, 30);
+
+    camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 100);
+    camera.position.set(0, 0, 14);
+
+    renderer = new THREE.WebGLRenderer({antialias: true, alpha: false});
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    document.body.appendChild(renderer.domElement);
+
+    // Lights
+    const amb = new THREE.AmbientLight(0xffffff, 0.4);
+    scene.add(amb);
+    const dir = new THREE.DirectionalLight(0xffffff, 0.6);
+    dir.position.set(5, 5, 8);
+    scene.add(dir);
+
+    raycaster = new THREE.Raycaster();
+    mouse = new THREE.Vector2(-2, -2);
+
+    rotateGroup = new THREE.Group();
+    scene.add(rotateGroup);
+
+    // Build initial arch
+    buildArch(currentArch);
+
+    // Orbit controls (manual minimal)
+    setupOrbit();
+    setupTabs();
+
+    window.addEventListener('resize', onResize);
+    window.addEventListener('mousemove', onMouseMove);
+    animate();
+}
+
+function clearArch() {
+    while (rotateGroup.children.length > 0) {
+        const obj = rotateGroup.children[0];
+        rotateGroup.remove(obj);
+        if (obj.geometry) obj.geometry.dispose();
+        if (obj.material) {
+            if (obj.material.dispose) obj.material.dispose();
+        }
+    }
+    archMeshes = [];
+    edgeLines = [];
+}
+
+function buildArch(archKey) {
+    clearArch();
+    const arch = ARCHS[archKey];
+    if (!arch) return;
+
+    document.getElementById('arch-name').textContent = arch.name;
+    document.getElementById('arch-sprint').textContent = arch.sprint;
+    document.getElementById('arch-desc').textContent = arch.description;
+    document.getElementById('arch-meta').textContent = arch.meta;
+
+    const moduleById = {};
+
+    // Build module boxes
+    for (const m of arch.modules) {
+        const color = COLOR[m.type] || 0x888888;
+        const geom = new THREE.BoxGeometry(m.size[0], m.size[1], m.size[2]);
+        const mat = new THREE.MeshPhongMaterial({
+            color: color,
+            emissive: color,
+            emissiveIntensity: 0.4,
+            transparent: true,
+            opacity: 0.85,
+            shininess: 80,
+        });
+        const mesh = new THREE.Mesh(geom, mat);
+        mesh.position.set(m.pos[0], m.pos[1], m.pos[2]);
+        mesh.userData = m;
+        rotateGroup.add(mesh);
+        archMeshes.push(mesh);
+        moduleById[m.id] = mesh;
+
+        // Wireframe edge
+        const edges = new THREE.EdgesGeometry(geom);
+        const lineMat = new THREE.LineBasicMaterial({color: 0xffffff, transparent: true, opacity: 0.25});
+        const wire = new THREE.LineSegments(edges, lineMat);
+        wire.position.copy(mesh.position);
+        rotateGroup.add(wire);
+
+        // Text label as sprite
+        const label = makeTextSprite(m.label, color);
+        label.position.set(m.pos[0], m.pos[1] + m.size[1]/2 + 0.25, m.pos[2]);
+        rotateGroup.add(label);
+    }
+
+    // Build edges
+    for (const [a, b] of arch.edges) {
+        const ma = moduleById[a]; const mb = moduleById[b];
+        if (!ma || !mb) continue;
+        const points = [ma.position.clone(), mb.position.clone()];
+        const geom = new THREE.BufferGeometry().setFromPoints(points);
+        const mat = new THREE.LineBasicMaterial({
+            color: 0x00ffff,
+            transparent: true,
+            opacity: 0.35,
+        });
+        const line = new THREE.Line(geom, mat);
+        rotateGroup.add(line);
+        edgeLines.push(line);
+    }
+
+    // Auto-center group
+    const box = new THREE.Box3().setFromObject(rotateGroup);
+    const center = box.getCenter(new THREE.Vector3());
+    rotateGroup.position.sub(center);
+    const size = box.getSize(new THREE.Vector3());
+    const maxSize = Math.max(size.x, size.y, size.z);
+    camera.position.set(0, 0, Math.max(maxSize * 1.6, 10));
+}
+
+function makeTextSprite(text, color = 0xffffff) {
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    const fontSize = 32;
+    ctx.font = `${fontSize}px monospace`;
+    const metrics = ctx.measureText(text);
+    canvas.width = Math.ceil(metrics.width) + 20;
+    canvas.height = fontSize + 12;
+    ctx.font = `${fontSize}px monospace`;
+    ctx.fillStyle = '#' + color.toString(16).padStart(6, '0');
+    ctx.shadowColor = '#' + color.toString(16).padStart(6, '0');
+    ctx.shadowBlur = 8;
+    ctx.fillText(text, 10, fontSize);
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.needsUpdate = true;
+    const mat = new THREE.SpriteMaterial({map: tex, transparent: true});
+    const sprite = new THREE.Sprite(mat);
+    const scaleX = canvas.width / 100;
+    sprite.scale.set(scaleX, canvas.height / 100, 1);
+    return sprite;
+}
+
+// =====================================================================
+// ORBIT controls (minimal)
+// =====================================================================
+let isDragging = false, lastX = 0, lastY = 0;
+let groupRotX = 0, groupRotY = 0;
+let autoRotate = true;
+
+function setupOrbit() {
+    const dom = renderer.domElement;
+    dom.addEventListener('mousedown', (e) => { isDragging = true; lastX = e.clientX; lastY = e.clientY; autoRotate = false; });
+    window.addEventListener('mouseup', () => { isDragging = false; });
+    window.addEventListener('mousemove', (e) => {
+        if (!isDragging) return;
+        const dx = e.clientX - lastX; const dy = e.clientY - lastY;
+        groupRotY += dx * 0.005;
+        groupRotX += dy * 0.005;
+        groupRotX = Math.max(-1.4, Math.min(1.4, groupRotX));
+        lastX = e.clientX; lastY = e.clientY;
+    });
+    dom.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        const factor = e.deltaY > 0 ? 1.1 : 0.9;
+        camera.position.z = Math.max(5, Math.min(30, camera.position.z * factor));
+    }, {passive: false});
+}
+
+function onMouseMove(e) {
+    mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+    mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+}
+
+// =====================================================================
+// TABS
+// =====================================================================
+function setupTabs() {
+    const container = document.getElementById('tabs');
+    container.innerHTML = '';
+    for (const [key, arch] of Object.entries(ARCHS)) {
+        const btn = document.createElement('button');
+        btn.className = 'tab' + (key === currentArch ? ' active' : '');
+        btn.textContent = arch.name.split(' ')[0];
+        btn.title = arch.name;
+        btn.addEventListener('click', () => {
+            currentArch = key;
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            btn.classList.add('active');
+            buildArch(key);
+            groupRotX = 0; groupRotY = 0; autoRotate = true;
+        });
+        container.appendChild(btn);
+    }
+}
+
+// =====================================================================
+// TOOLTIP via raycaster
+// =====================================================================
+function updateTooltip() {
+    raycaster.setFromCamera(mouse, camera);
+    const hits = raycaster.intersectObjects(archMeshes);
+    const tooltip = document.getElementById('tooltip');
+    if (hits.length > 0) {
+        const m = hits[0].object;
+        const d = m.userData;
+        if (m !== hoveredMesh) {
+            if (hoveredMesh) hoveredMesh.material.emissiveIntensity = 0.4;
+            hoveredMesh = m;
+            m.material.emissiveIntensity = 1.0;
+        }
+        tooltip.querySelector('.tt-name').textContent = d.label;
+        tooltip.querySelector('.tt-role').textContent = d.role;
+        tooltip.querySelector('.tt-dim').textContent = '⊳ ' + d.dim;
+        const trainEl = tooltip.querySelector('.tt-train');
+        trainEl.textContent = '◆ ' + d.train;
+        trainEl.className = 'tt-train' + (d.train === 'frozen' ? ' frozen' : '');
+        const sprintEl = tooltip.querySelector('.tt-sprint');
+        sprintEl.textContent = ARCHS[currentArch].sprint;
+        tooltip.style.display = 'block';
+        const evt = window._lastMouseEvent;
+        if (evt) {
+            tooltip.style.left = (evt.clientX + 14) + 'px';
+            tooltip.style.top = (evt.clientY + 14) + 'px';
+        }
+    } else {
+        if (hoveredMesh) {
+            hoveredMesh.material.emissiveIntensity = 0.4;
+            hoveredMesh = null;
+        }
+        tooltip.style.display = 'none';
+    }
+}
+window.addEventListener('mousemove', (e) => { window._lastMouseEvent = e; });
+
+// =====================================================================
+// ANIMATE
+// =====================================================================
+function animate() {
+    requestAnimationFrame(animate);
+    if (autoRotate) {
+        groupRotY += 0.003;
+    }
+    rotateGroup.rotation.y = groupRotY;
+    rotateGroup.rotation.x = groupRotX;
+    updateTooltip();
+    renderer.render(scene, camera);
+}
+
+function onResize() {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+}
+
+init();
+</script>
+</body>
+</html>

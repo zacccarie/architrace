@@ -29,7 +29,14 @@ DYNAMOSCOPE_URL = os.environ.get(
 )
 
 # Ajout sys.path pour imports upstream
+# adaptive-nn restructuré 2026-05-26 : core/ contient verifygrow_*, adaptive_nn,
+# events, ewc, icarl, vg_ncm, vg_continual, arch_snapshot, server
 import sys as _sys
-for _p in (ADAPTIVE_NN_PATH, DYNAMOSCOPE_PATH):
-    if str(_p) not in _sys.path:
+_paths = [
+    ADAPTIVE_NN_PATH,
+    ADAPTIVE_NN_PATH / 'core',
+    DYNAMOSCOPE_PATH,
+]
+for _p in _paths:
+    if _p.exists() and str(_p) not in _sys.path:
         _sys.path.insert(0, str(_p))
