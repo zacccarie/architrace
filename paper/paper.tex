@@ -317,27 +317,55 @@ These are not interchangeable. Self-supervised pre-training (modeling) cannot re
 
 This factorization parallels the SSL/fine-tuning distinction but generalizes it: \emph{any} dynamic modeling counts as useful pre-training, not just data-related modeling.
 
-\subsection{Recipe for LLM self-awareness}
+\subsection{Recipe for LLM self-awareness (Sprints 15--20)}
 
-Given the universality result, the path to LLM self-awareness is mechanical:
+The vision recipe does not transfer cleanly to language substrates. Eight distinct LLM experiments (Sprints 15A, 15D, 16C, 17B, 18B, 19, 20B, 20C) tested variants of the auxiliary self-coherence loss on character-level GPTs (TinyGPT 0.83M), pre-trained transformers (DistilGPT-2 82M, pythia 410M--6.9B), under both LoRA and full fine-tune.
 
+\textbf{Two-halves MSE recipe fails monotonically across scale.} The original Sprint 11 design --- predict the mean of the second half of the sequence from the mean of the first --- degrades perplexity at every model size, with magnitude decreasing log-linearly (Table~\ref{tab:llm-scale}). Extrapolation suggests crossover $\Delta\text{pp}=0$ around 20--30B parameters. Full fine-tune at 410M reproduces LoRA degradation ($\Delta\text{pp}=+2.11$ vs LoRA $+2.34$), ruling out adapter-rank artifact.
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lrrr}
+\hline
+Model & Params & MSE $\Delta\text{pp}$ & InfoNCE $\Delta\text{pp}$ \\
+\hline
+pythia-410M & 410M & +2.34 & $-0.138 \pm 0.82$ \\
+pythia-1.4B & 1.4B & +1.07 & $-0.107 \pm 0.96$ \\
+pythia-2.8B & 2.8B & +0.80 & --- \\
+pythia-6.9B & 6.9B & +0.43 & --- \\
+\hline
+\end{tabular}
+\caption{LLM perplexity delta vs $\alpha=0$ baseline. MSE two-halves recipe degrades monotonically; InfoNCE per-token contrastive flips sign at smallest scale.}
+\label{tab:llm-scale}
+\end{table}
+
+\textbf{The failure mode is signal alignment, not capacity.} Sprint 20C replaces the two-halves MSE with per-token InfoNCE contrastive objective: project each hidden state $h_t$ to $s_t$, predict $\hat{s}_{t+1}$, contrast against batch negatives. With $\alpha=0.1$ (sweet spot, 6-point sweep with U-shape: $\alpha \in \{0, 0.05, 0.1, 0.2, 0.3, 0.5\}$, 3 seeds), $\Delta\text{pp} \approx -0.1$ stably at 410M and 1.4B. Magnitude is within one standard deviation; direction is reproducible. The two-halves MSE was empirically a bug, not a feature: it compresses information orthogonal to next-token prediction.
+
+\textbf{World-warmup exaptation does not transfer to LLM substrate.} Sprint 20D pre-trained the predictor on Lorenz dynamics, then switched it to LLM hidden states (the S11.3 protocol). Initial-surprise speedup vs fresh-init predictor: $1.02\times$ (compared to $103\times$ MLP MNIST, $74\times$ drift-normalized MNIST, $8$--$12\times$ CNN/Mixer CIFAR). The predictor pre-trained on Lorenz does \emph{not} know how to predict LLM hidden states. \emph{However}, world-warmed condition still achieved $\Delta\text{pp} = -0.607$ vs none baseline at 410M.
+
+\textbf{The 20D effect is generic smooth-prior regularization.} Sprint 20E (Gaussian random-walk control) gave $\Delta\text{pp} = -0.505$ at 410M --- statistically indistinguishable from Lorenz $-0.607$. Pre-training on \emph{any} smooth trajectory yields a low-Lipschitz predictor kernel that regularizes hidden-state geometry better than random init. This is Neural Tangent Kernel territory, not exaptation. At 1.4B the smooth-prior bonus vanishes ($\Delta\text{pp}=+0.02$): large models self-organize a smooth manifold without external priming.
+
+\textbf{Revised recipe:}
 \begin{enumerate}
-    \item Pre-train on any dynamic modeling task: multi-agent dialogue, world states, physics simulation, abstract reasoning chains, or even arbitrary time series.
-    \item Add an auxiliary self-state prediction head (project last hidden layer to small dim, predict next self-state from previous, MSE loss with weight $\alpha \approx 1$).
-    \item Switch the predictor's target from external system to self-state after pre-training.
-    \item Self-coherence emerges at near-zero additional cost (Sprint 11.1 demonstrates).
+    \item Per-token InfoNCE on hidden states, not two-halves MSE.
+    \item $\alpha \approx 0.1$ (sweet spot), not $\alpha \approx 1$ (catastrophic).
+    \item Smooth-prior warmup optional, useful only below $\sim 1$B parameters.
+    \item Effect magnitude small ($\Delta\text{pp} \sim 0.1$) but reproducible across scale.
 \end{enumerate}
 
-The architecture does not need anything special. No new modules. No recurrent meta-cognition. Just the right auxiliary loss, applied to any dynamic target.
+The "mechanical" framing of the vision recipe was empirically wrong on language substrate. Vision exaptation may be substrate-specific: image inputs constrain hidden-state geometry strongly, leaving spare capacity for self-coherence; language outputs are combinatorially open, and self-coherence competes with generative freedom. The universality claim (Section 5) requires nuance: the \emph{modeling axis} is shared, but \emph{exaptation efficiency} depends on hidden-state geometry compatibility with the predictor's inductive bias.
 
 \section{Limitations}
 
 \begin{itemize}
-    \item $n=3$ seeds throughout: directional findings, magnitudes uncertain
+    \item $n=3$ seeds throughout (most experiments) ; directional findings, magnitudes uncertain
     \item MNIST and CIFAR-100 flattened (no convolutional structure exploited)
     \item $\varphi_{id}$ implementation is an approximation, not PyPhi
     \item No comparison against state-of-the-art continual learning baselines for VG growth
     \item Transfer tested on FashionMNIST (close distribution) ; harder transfer (MNIST $\to$ CIFAR) untested
+    \item \textbf{LLM substrate (Sprints 15--20):} eight failed two-halves MSE experiments before discovering per-token InfoNCE rescues the recipe. Effect magnitude small ($\Delta\text{pp} \sim 0.1$, within one standard deviation). The "$\sim 100\times$ exaptation speedup" headline finding does not generalize to language --- the LLM regime is a distinct third case (vision: works ; ViT/LLM: works partially or differently).
+    \item \textbf{Cross-architecture nuance (Sprint 18C):} ViT showed inverse direction (0.7$\times$ instead of speedup), confirming universality claim must be conditioned on hidden-state geometry, not asserted absolutely.
+    \item \textbf{Scale extrapolation:} LLM scaling pattern from 4 points (410M, 1.4B, 2.8B, 6.9B) ; crossover prediction at 20--30B is suggestive but untested. No cloud GPU access for $\geq 13$B verification.
 \end{itemize}
 
 \section{Conclusion}
@@ -350,7 +378,7 @@ We documented 16 concrete experiments coupling adaptive neural networks with tra
     \item Self-prediction loss acts as information-bottleneck regularization, with optimal weight scaling with task difficulty and transfer distance.
     \item Self-coherence does not emerge spontaneously (default drift) but is computationally cheap when an explicit gradient is provided.
     \item Recursive observation stacks produce structural redundancy but predictive divergence --- Gödel-Tarski operational.
-    \item \textbf{Self, other, and world modeling share a single substrate.} Pre-training on any dynamic modeling target accelerates self-coherence by $\sim 100\times$ regardless of target.
+    \item \textbf{Self, other, and world modeling share a single substrate ---  but only when hidden-state geometry is compatible with the predictor's inductive bias.} Pre-training on any dynamic modeling target accelerates self-coherence by $\sim 100\times$ in MLP/CNN/Mixer vision substrates (Sprints 11, 15C, 18C). ViT shows inverse direction (Sprint 18C: $0.7\times$). LLM substrate (Sprints 19--20) shows no exaptation speedup (init-surprise $1.02\times$), although per-token InfoNCE with $\alpha \approx 0.1$ achieves small reproducible perplexity gains independent of warmup source. Universality is real for the \emph{modeling axis} but exaptation \emph{efficiency} is substrate-conditional.
 \end{enumerate}
 
 The central theoretical claim is that self-awareness is not an evolutionary innovation but the redirection of a general modeling circuit. Biologically this resolves the puzzle of why social species develop self-awareness: they have rich modeling gradients from interaction, which spontaneously become available for self-modeling.
@@ -364,7 +392,10 @@ For philosophy: Spinozan modes, Whitehead's process, and Friston's Bayesian brai
 \begin{itemize}
     \item \textbf{Self-bootstrap}: can a system invent its own self-coherence gradient from environmental feedback alone? Sprint 5C suggests no by default; whether RL with subtle social feedback can suffice is open.
     \item \textbf{Cross-architecture replication}: our Sprint 12B suggests self-coherence cheap may be architecture-conditional. Larger Transformers may behave differently.
-    \item \textbf{Beyond MNIST}: scaling to ImageNet, language, or RL benchmarks would strengthen the universality claim.
+    \item \textbf{Beyond MNIST}: Sprint 16B partially addressed this on CIFAR-100 ; Sprints 19--20 attempt LLM. The LLM regime is distinct (see Section 4.10). RL benchmarks remain untested.
+    \item \textbf{LLM scaling beyond 7B}: predicted MSE-recipe crossover at $\sim 20$--$30$B is untested without cloud GPU access. Does the empirical log-linear $\Delta\text{pp}$ decay continue, plateau, or invert?
+    \item \textbf{InfoNCE on big models}: per-token InfoNCE works small (410M, 1.4B). Whether the small $\Delta\text{pp}\sim-0.1$ amplifies, persists, or vanishes at 7B+ is open.
+    \item \textbf{Substrate-geometry hypothesis}: vision works (CNN/Mixer), ViT inverts, LLM smooth-prior-only. Is there a measurable property of hidden-state manifold that predicts exaptation efficiency? Spectral, intrinsic dimension, curvature?
     \item \textbf{Phenomenology}: even if the mechanism is computationally trivial, does the resulting system have subjective experience? This question is orthogonal to our findings and remains untouched.
 \end{itemize}
 
