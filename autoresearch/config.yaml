@@ -1,0 +1,54 @@
+# autoresearch config — architrace
+#
+# ⚠️ AVANT DE LANCER : lis autoresearch/CONTEXT.md.
+# architrace est en finalisation paper. Recommandation = SKIP autoresearch loop,
+# basculer sur metamorph M3 (Q3 directement).
+#
+# Si vraiment tu insistes, lis aussi PLAYBOOK.md pour les findings déjà solides
+# (ne refait pas ce qui est validé) et les pièges connus.
+
+# === Required ===
+
+# Default : sprint 3.1 extended bench (5 encoders × 3 systèmes × seeds)
+# Métrique = delta corr_dim moyen vs ground truth (lower better)
+train_cmd: ".venv/bin/python autoresearch/wrapper.py sprint3_1"
+
+metric_name: "delta_corr_dim"
+metric_pattern: "delta_corr_dim:\\s+([0-9.]+)"
+metric_direction: "lower_better"
+
+# Fichiers que l'agent PEUT modifier — scope minimal volontaire.
+# Pour rappel : architrace = stable, paper-finalize. Préférer NE PAS itérer ici.
+edit_files:
+  - architrace/triggers.py
+  # Removed train_with_trigger.py + predictors.py : interfaces utilisées partout
+  # dans les sprints historiques. Modif risquée. Voir CONTEXT.md.
+
+# === Optional ===
+
+readonly_files:
+  - autoresearch/wrapper.py
+  - experiments/sprint3_1_extended_bench/dynamical_systems.py    # ground truth — never modify
+  - data/
+
+time_budget_seconds: 300
+
+extra_metrics:
+  - name: vg_tiny_delta
+    pattern: "vg_tiny_delta:\\s+([0-9.]+)"
+  - name: resnet50_rand_delta
+    pattern: "resnet50_rand_delta:\\s+([0-9.]+)"
+  - name: training_seconds
+    pattern: "training_seconds:\\s+([0-9.]+)"
+
+idea_hints:
+  - "vary VG encoder depth and channel widths"
+  - "test alternate growth triggers (plateau vs Lyapunov vs emergence)"
+  - "experiment with rollout horizon and aux loss weighting"
+  - "try mixed receptive fields (dilated convs)"
+  - "vary trigger threshold and verify-then-keep delay"
+  - "compare encoders matched by FLOPs not params"
+
+loop_constraints:
+  no_new_packages: true
+  max_runtime_minutes: 10
