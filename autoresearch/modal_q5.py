@@ -224,7 +224,28 @@ def full_sweep():
         ("infonce", 1.0),    # match S20G original
         ("mse", 1.0),        # Q5 hypothèse
     ]
-    seeds = [0, 1, 2]
+    _run_sweep_internal(conditions, seeds)
+
+
+@app.local_entrypoint()
+def alpha_sweep_old():
+    """Sweep MSE α ∈ [0.1, 0.5, 1.0, 2.0] × 4 seeds. ~$2-3 cloud H100.
+
+    Trace MSE aux dose-response curve. Si MSE harmful augmente avec α → trend confirmé.
+    Si MSE flat ou inverted-U → nuance Q5 finding.
+    """
+    conditions = [
+        ("none", 0.0),       # baseline
+        ("mse", 0.1),
+        ("mse", 0.5),
+        ("mse", 1.0),
+        ("mse", 2.0),
+    ]
+    seeds = [0, 1, 2, 3]  # 4 seeds × 5 conditions = 20 runs
+    _run_sweep_internal(conditions, seeds)
+
+
+def _run_sweep_internal(conditions, seeds):
     all_results = []
     for aux_type, weight in conditions:
         print(f"\n========= Aux={aux_type} w={weight} =========")

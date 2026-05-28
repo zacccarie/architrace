@@ -2,3 +2,4 @@ commit	condition	val_mse	delta_vs_base	std	status	description
 404ce5e	q5_baseline_none_a0	0.16549	0.00000	0.07924	keep	Q5 baseline α=0 (no aux loss) — n=3 seeds Pythia-410m LoRA Lorenz task 100 steps H100
 404ce5e	q5_infonce_a1	0.13281	-0.03268	0.03238	keep	Q5 InfoNCE α=1 (match S20G) — better than baseline, confirms aux loss helps
 404ce5e	q5_mse_a1	0.18572	+0.02023	0.14950	keep	Q5 MSE α=1 (hypothesis) — PIRE que baseline, RÉFUTE Q5. Aux MSE diverge pendant training.
+17c8bdc	q5_alpha_sweep	multiple	+ all worse	high_var	keep	α sweep [0.1, 0.5, 1, 2]: tous pires que baseline (0.21-0.34 vs 0.140). MSE wrong type, training instable std 0.08-0.32. Confirme Q5.
